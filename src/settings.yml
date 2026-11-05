@@ -1,24 +1,31 @@
 ---
-id: 532429
-name: Sniffnet Downloads
-description: Hourly Sniffnet download stats.
 strategy: static
-refresh_interval: 60
-refresh_interval_floor: 60
-static_data: '{}'
 no_screen_padding: 'no'
 dark_mode: 'no'
+static_data: "{}"
+polling_verb: get
 framework_version: 3.4.4
+serverless_language: node
+refresh_interval_floor: 60
+polling_url: ''
+polling_headers:
+polling_body:
+id: 532429
+oauth_enabled: 'false'
+oauth_pkce_enabled: 'no'
 custom_fields:
-  - keyname: about
-    field_type: author_bio
-    name: About this plugin
-    description: A serverless download dashboard for Sniffnet.
-    github_url: https://github.com/GyulyVGC/sniffnet-downloads-trmnl-plugin
-    learn_more_url: https://sniffnet.app
-  - keyname: github_token
-    field_type: password
-    name: GitHub token (optional)
-    optional: true
-    description: A fine-grained read-only token avoids GitHub's shared unauthenticated rate limit.
-    help_text: Leave blank first. Add a token only if GitHub reports rate-limit errors.
+- keyname: about
+  field_type: author_bio
+  name: About this plugin
+  description: A serverless download dashboard for Sniffnet.
+  github_url: https://github.com/GyulyVGC/sniffnet-downloads-trmnl-plugin
+  learn_more_url: https://sniffnet.app
+- keyname: github_token
+  field_type: password
+  name: GitHub token (optional)
+  optional: true
+  description: A fine-grained read-only token avoids GitHub's shared unauthenticated rate limit.
+  help_text: Leave blank first. Add a token only if GitHub reports rate-limit errors.
+name: Sniffnet Downloads
+description: Hourly Sniffnet download stats.
+refresh_interval: 60
