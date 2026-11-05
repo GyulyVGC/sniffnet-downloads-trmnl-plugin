@@ -16,7 +16,6 @@ custom_fields:
     description: A serverless download dashboard for Sniffnet.
     github_url: https://github.com/GyulyVGC/sniffnet-downloads-trmnl-plugin
     learn_more_url: https://sniffnet.app
-    category: analytics,developer_tools
   - keyname: github_token
     field_type: password
     name: GitHub token (optional)
