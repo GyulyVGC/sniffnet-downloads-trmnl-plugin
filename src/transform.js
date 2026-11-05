@@ -65,6 +65,7 @@ async function collect(input) {
   const results = Object.fromEntries(names.map((name, index) => [name, settled[index]]));
   const metrics = Object.fromEntries(METRIC_KEYS.map((key) => [key, null]));
   const warnings = [];
+  const failedSources = [];
 
   if (results.github.status === "fulfilled" && Array.isArray(results.github.value)) {
     metrics.gw = 0;
@@ -85,14 +86,19 @@ async function collect(input) {
   } else {
     const detail = results.github.reason && results.github.reason.message;
     warnings.push(`GitHub unavailable${detail ? ` (${detail})` : ""}`);
+    failedSources.push("GitHub");
   }
 
   if (results.crates.status === "fulfilled") {
     const count = Number(results.crates.value && results.crates.value.crate && results.crates.value.crate.downloads);
     if (Number.isFinite(count) && count >= 0) metrics.c = count;
-    else warnings.push("crates.io returned an invalid count");
+    else {
+      warnings.push("crates.io returned an invalid count");
+      failedSources.push("crates.io");
+    }
   } else {
     warnings.push("crates.io unavailable");
+    failedSources.push("crates.io");
   }
 
   for (const [source, key] of [["homebrew", "b"], ["docker", "d"]]) {
@@ -101,13 +107,15 @@ async function collect(input) {
         metrics[key] = packageDownloadCount(results[source].value);
       } catch (error) {
         warnings.push(`${source} returned an invalid count`);
+        failedSources.push(source === "homebrew" ? "Homebrew" : "Docker");
       }
     } else {
       warnings.push(`${source} unavailable`);
+      failedSources.push(source === "homebrew" ? "Homebrew" : "Docker");
     }
   }
 
-  return { metrics, warnings };
+  return { metrics, warnings, failedSources };
 }
 
 function sum(object) {
@@ -222,7 +230,7 @@ async function run(input) {
   const previousState = safeState(input);
   const previousMetrics = previousState.m && typeof previousState.m === "object" ? previousState.m : {};
   const initialized = new Set(Array.isArray(previousState.i) ? previousState.i : []);
-  const { metrics: observed, warnings } = await collect(input || {});
+  const { metrics: observed, warnings, failedSources } = await collect(input || {});
   const current = {};
   const changes = {};
 
@@ -287,13 +295,15 @@ async function run(input) {
   const timeZone = localTimeZone(input);
   const observedMaxHourly = Math.max(0, ...displayHours.map((item) => sum(item.sources)));
   const maxHourly = Math.max(1, observedMaxHourly);
-  const hourly = displayHours.map((item) => {
+  const hourly = displayHours.map((item, index) => {
     const value = sum(item.sources);
+    const hourLabel = formattedHour(item.timestamp, timeZone);
     return {
       value,
       formatted: value.toLocaleString("en-US"),
       height: value > 0 ? Math.max(4, Math.round((value / maxHourly) * 100)) : 0,
-      hour_label: formattedHour(item.timestamp, timeZone),
+      hour_label: hourLabel,
+      axis_label: (index + 1) % 3 === 0 ? hourLabel : "",
     };
   });
 
@@ -311,10 +321,15 @@ async function run(input) {
     rowData("Linux", rollingPlatforms.linux, latest.platforms.linux, rollingTotal),
     rowData("Unknown", rollingPlatforms.unknown, latest.platforms.unknown, rollingTotal),
   ];
+  const failedSourceNames = Array.from(new Set(failedSources));
+  const warningStatus = failedSourceNames.length
+    ? `Failed: ${failedSourceNames.join(", ")}`
+    : (warnings.length ? `Warning: ${warnings[0]}` : "");
+  const lifetimeTotal = sum(lifetime.sources);
 
   return {
-    lifetime: sum(lifetime.sources),
-    lifetime_formatted: sum(lifetime.sources).toLocaleString("en-US"),
+    lifetime: lifetimeTotal,
+    lifetime_formatted: lifetimeTotal.toLocaleString("en-US"),
     latest_hour: latestTotal,
     latest_hour_formatted: latestTotal.toLocaleString("en-US"),
     rolling_24h: rollingTotal,
@@ -331,6 +346,7 @@ async function run(input) {
     ready: allMetricsReady && hasMeasuredInterval,
     baseline_only: allMetricsReady && !hasMeasuredInterval,
     status: warnings.length ? warnings.join("; ") : "All sources online",
+    warning_status: warningStatus,
     has_warnings: warnings.length > 0,
     updated_at: formattedUpdatedAt(now, timeZone),
     trmnl_state: {

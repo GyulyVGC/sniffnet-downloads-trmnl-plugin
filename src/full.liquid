@@ -14,10 +14,6 @@
       </div>
     </div>
 
-    {% if has_warnings %}
-      <div class="sn-baseline">Partial update: {{ status | truncate: 105 }}</div>
-    {% endif %}
-
     <div class="sn-chart">
       <div class="sn-chart-body">
         <div class="sn-y-axis">
@@ -34,7 +30,7 @@
             {% endfor %}
           </div>
           <div class="sn-axis sn-axis--hours">
-            {% for point in hourly %}<span>{{ point.hour_label }}</span>{% endfor %}
+            {% for point in hourly %}<span>{{ point.axis_label }}</span>{% endfor %}
           </div>
         </div>
       </div>
@@ -67,7 +63,14 @@
       </div>
     </div>
   </div>
-  <div class="title_bar sniffnet">
+  <div class="title_bar sniffnet sniffnet--status">
     <span class="title">Sniffnet downloads</span>
+    <span class="sn-footer-status">
+      {% if has_warnings %}
+        <span class="sn-status-icon">!</span><span>{{ warning_status }}</span>
+      {% else %}
+        <span class="sn-status-icon">✓</span><span>All sources updated</span>
+      {% endif %}
+    </span>
     <span class="instance">{{ updated_at }}</span>
   </div>

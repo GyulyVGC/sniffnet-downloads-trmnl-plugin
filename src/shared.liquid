@@ -38,7 +38,9 @@
   .sn-hour, .sn-day { text-align: right; font-size: .6875rem; font-weight: 700; }
   .sn-column-head { display: grid; grid-template-columns: 78px 1fr 48px 54px; gap: 6px; font-size: .5rem; font-weight: 800; text-transform: uppercase; }
   .sn-column-head span:nth-last-child(-n+2) { text-align: right; }
-  .sn-baseline { border: 2px dashed currentColor; border-radius: 8px; padding: 6px 10px; font-size: .6875rem; font-weight: 700; text-align: center; }
+  .sn-footer-status { display: flex; align-items: center; justify-content: center; gap: 5px; max-width: 460px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: .625rem; font-weight: 800; text-align: center; }
+  .sn-footer-status > span:last-child { overflow: hidden; text-overflow: ellipsis; }
+  .sn-status-icon { display: inline-flex; width: 14px; height: 14px; flex: 0 0 14px; align-items: center; justify-content: center; border: 1.5px solid currentColor; border-radius: 50%; font-family: sans-serif; font-size: .625rem; font-weight: 900; line-height: 1; }
   .sn-compact-total { font-size: 2.625rem; font-weight: 800; line-height: 1; letter-spacing: -1px; }
   .sn-compact-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; }
   .sn-mini-list { display: grid; grid-template-columns: 1fr auto auto; gap: 4px 8px; font-size: .6875rem; }
@@ -47,12 +49,12 @@
   .sn-mini-list .value { text-align: right; }
   .title_bar.sniffnet { width: 100%; justify-content: space-between; }
   .title_bar.sniffnet .instance { flex: 1 1 auto; text-align: right; font-size: .75rem; }
+  .title_bar.sniffnet--status { display: grid; grid-template-columns: 1fr auto 1fr; }
+  .title_bar.sniffnet--status .instance { justify-self: end; }
   .view--half_horizontal .sn-bars, .view--quadrant .sn-bars { height: 54px; }
   .view--half_vertical .sn-bars { height: 88px; }
   .view--full .sn-bars { height: 135px; }
   .view--full .sn-y-axis { height: 135px; }
-  .view--full .layout.sniffnet:has(.sn-baseline) .sn-bars { height: 100px; }
-  .view--full .layout.sniffnet:has(.sn-baseline) .sn-y-axis { height: 100px; }
   .view--full .sn-row { margin-top: 9px; }
   .view--quadrant .layout { gap: 7px; }
   .view--quadrant .sn-kpi { min-width: 82px; padding: 5px 7px; }
