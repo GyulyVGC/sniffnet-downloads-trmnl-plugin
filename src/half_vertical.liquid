@@ -1,0 +1,28 @@
+  <div class="layout sniffnet">
+    <div>
+      <span class="sn-kicker">All-time downloads</span>
+      <span class="sn-compact-total">{{ lifetime_formatted }}</span>
+    </div>
+    <div class="sn-compact-grid">
+      <div class="sn-kpi"><span class="sn-kpi-value">{{ rolling_24h_formatted }}</span><span class="sn-kpi-label">Rolling 24h</span></div>
+      <div class="sn-kpi"><span class="sn-kpi-value">{{ latest_hour_formatted }}</span><span class="sn-kpi-label">Latest hour</span></div>
+    </div>
+    <div class="sn-chart">
+      <div class="sn-section-head"><span class="sn-section-title">Hourly downloads</span><span class="sn-section-note">24 samples</span></div>
+      <div class="sn-bars">{% for point in hourly %}<div class="sn-bar"><span class="sn-bar-fill" style="height: {{ point.height }}%"></span></div>{% endfor %}</div>
+      <div class="sn-axis">{% for label in axis_compact %}<span>{{ label }}</span>{% endfor %}</div>
+    </div>
+    <div class="sn-panel">
+      <div class="sn-section-head"><span class="sn-section-title">Sources</span><span class="sn-section-note">24h / hour</span></div>
+      <div class="sn-mini-list">
+        {% for row in source_rows %}<span class="name">{{ row.name }}</span><span class="value">{{ row.formatted }}</span><span class="value">{{ row.hourly_formatted }}</span>{% endfor %}
+      </div>
+    </div>
+    <div class="sn-panel">
+      <div class="sn-section-head"><span class="sn-section-title">Platforms</span><span class="sn-section-note">24h / hour</span></div>
+      <div class="sn-mini-list">
+        {% for row in platform_rows %}<span class="name">{{ row.name }}</span><span class="value">{{ row.formatted }}</span><span class="value">{{ row.hourly_formatted }}</span>{% endfor %}
+      </div>
+    </div>
+  </div>
+  <div class="title_bar sniffnet"><span class="title">Sniffnet downloads</span><span class="instance">{{ updated_at }}</span></div>

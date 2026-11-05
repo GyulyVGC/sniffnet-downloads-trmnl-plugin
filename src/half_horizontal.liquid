@@ -1,0 +1,20 @@
+  <div class="layout sniffnet">
+    <div class="sn-header">
+      <div>
+        <span class="sn-kicker">All-time downloads</span>
+        <span class="sn-compact-total">{{ lifetime_formatted }}</span>
+      </div>
+      <div class="sn-kpis">
+        <div class="sn-kpi"><span class="sn-kpi-value">{{ rolling_24h_formatted }}</span><span class="sn-kpi-label">Rolling 24h</span></div>
+        <div class="sn-kpi"><span class="sn-kpi-value">{{ latest_hour_formatted }}</span><span class="sn-kpi-label">Latest hour</span></div>
+      </div>
+    </div>
+    <div class="sn-chart">
+      <div class="sn-section-head"><span class="sn-section-title">Hourly downloads</span><span class="sn-section-note">last 24 samples</span></div>
+      <div class="sn-bars">
+        {% for point in hourly %}<div class="sn-bar"><span class="sn-bar-fill" style="height: {{ point.height }}%"></span></div>{% endfor %}
+      </div>
+      <div class="sn-axis">{% for label in axis_compact %}<span>{{ label }}</span>{% endfor %}</div>
+    </div>
+  </div>
+  <div class="title_bar sniffnet"><span class="title">Sniffnet downloads</span><span class="instance">{{ updated_at }}</span></div>
