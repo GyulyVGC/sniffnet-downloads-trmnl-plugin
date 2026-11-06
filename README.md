@@ -37,6 +37,7 @@ Useful checks:
 
 ```sh
 node --test tests/transform_test.js
+node --test tests/ios_widget_test.js
 docker run --rm -v "$PWD:/plugin" trmnl/trmnlp lint
 docker run --rm -v "$PWD:/plugin" trmnl/trmnlp test
 docker run --rm -v "$PWD:/plugin" trmnl/trmnlp build --png
@@ -47,3 +48,7 @@ docker run --rm -v "$PWD:/plugin" trmnl/trmnlp build --png
 The generated GitHub Actions workflow validates pull requests and deploys commits to `main`. Add `TRMNL_API_KEY` under **Repository settings → Secrets and variables → Actions** before the first deployment.
 
 Never commit a TRMNL or GitHub API key to this repository.
+
+## iPhone widget
+
+The [`ios`](ios) directory contains a Scriptable widget that mirrors the current TRMNL screen on an iPhone Home Screen. Its setup flow stores the device API key in the iPhone Keychain instead of the script source. See the [iOS widget instructions](ios/README.md).
