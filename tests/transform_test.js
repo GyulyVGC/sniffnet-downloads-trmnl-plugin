@@ -16,17 +16,21 @@ const input = (state) => ({
 test("hourly transform state and chart behavior", async (suite) => {
   const originalDateNow = Date.now;
   const originalFetch = global.fetch;
+  const originalConsoleError = console.error;
   let now;
   let failCrates;
   let counts;
+  let errorLogs;
 
   const reset = () => {
     now = at(9, 5);
     failCrates = false;
     counts = { github: 100, crates: 40, homebrew: 20, docker: 10 };
+    errorLogs = [];
   };
 
   Date.now = () => now;
+  console.error = (...args) => errorLogs.push(args.join(" "));
   global.fetch = async (url) => {
     if (url.includes("crates.io") && failCrates) throw new Error("mock failure");
 
@@ -88,6 +92,10 @@ test("hourly transform state and chart behavior", async (suite) => {
       assert.equal(failed.has_warnings, true);
       assert.equal(failed.hourly.at(-1).has_errors, true);
       assert.equal(failed.trmnl_state.h.at(-1)[9], true);
+      assert.deepEqual(
+        errorLogs,
+        ["[Sniffnet Downloads] crates.io: mock failure"],
+      );
 
       now = at(10, 35);
       failCrates = false;
@@ -185,5 +193,6 @@ test("hourly transform state and chart behavior", async (suite) => {
   } finally {
     Date.now = originalDateNow;
     global.fetch = originalFetch;
+    console.error = originalConsoleError;
   }
 });

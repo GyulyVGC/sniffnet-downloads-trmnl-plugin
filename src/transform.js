@@ -5,6 +5,11 @@ const Y_AXIS_LABEL_GAP_PERCENT = 15;
 // Leave headroom inside TRMNL's five-second Serverless execution limit.
 const REQUEST_TIMEOUT_MS = 3500;
 
+function logSourceError(source, error) {
+  const detail = error && error.message ? error.message : String(error || "unknown error");
+  console.error(`[Sniffnet Downloads] ${source}: ${detail}`);
+}
+
 function customField(input, key) {
   const direct = input && input[key];
   const nested = input && input.trmnl && input.trmnl.plugin_settings &&
@@ -88,6 +93,10 @@ async function collect(input) {
     }
   } else {
     const detail = results.github.reason && results.github.reason.message;
+    logSourceError(
+      "GitHub",
+      results.github.status === "rejected" ? results.github.reason : "invalid response",
+    );
     warnings.push(`GitHub unavailable${detail ? ` (${detail})` : ""}`);
     failedSources.push("GitHub");
   }
@@ -96,10 +105,12 @@ async function collect(input) {
     const count = Number(results.crates.value && results.crates.value.crate && results.crates.value.crate.downloads);
     if (Number.isFinite(count) && count >= 0) metrics.c = count;
     else {
+      logSourceError("crates.io", "invalid download count");
       warnings.push("crates.io returned an invalid count");
       failedSources.push("crates.io");
     }
   } else {
+    logSourceError("crates.io", results.crates.reason);
     warnings.push("crates.io unavailable");
     failedSources.push("crates.io");
   }
@@ -109,10 +120,15 @@ async function collect(input) {
       try {
         metrics[key] = packageDownloadCount(results[source].value);
       } catch (error) {
+        logSourceError(source === "homebrew" ? "Homebrew" : "Docker", error);
         warnings.push(`${source} returned an invalid count`);
         failedSources.push(source === "homebrew" ? "Homebrew" : "Docker");
       }
     } else {
+      logSourceError(
+        source === "homebrew" ? "Homebrew" : "Docker",
+        results[source].reason,
+      );
       warnings.push(`${source} unavailable`);
       failedSources.push(source === "homebrew" ? "Homebrew" : "Docker");
     }
