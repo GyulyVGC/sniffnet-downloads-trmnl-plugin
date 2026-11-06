@@ -1,6 +1,16 @@
 const METRIC_KEYS = ["gw", "gm", "gl", "gu", "c", "b", "d"];
+const METRIC_BUCKET_INDEXES = {
+  gw: [1, 5],
+  gm: [1, 6],
+  gl: [1, 7],
+  gu: [1, 8],
+  c: [2, 8],
+  b: [3, 6],
+  d: [4, 7],
+};
 const HOUR_MS = 60 * 60 * 1000;
 const HISTORY_HOURS = 24;
+const STATE_VERSION = 2;
 const Y_AXIS_LABEL_GAP_PERCENT = 15;
 // Leave headroom inside TRMNL's five-second Serverless execution limit.
 const REQUEST_TIMEOUT_MS = 3500;
@@ -182,11 +192,47 @@ function unpackedHour(row) {
   };
 }
 
-function addPacked(target, addition) {
-  for (let index = 1; index <= 8; index += 1) {
-    target[index] += addition[index];
+function emptyPackedHour(timestamp) {
+  return packedHour(
+    timestamp,
+    { github: 0, crates: 0, homebrew: 0, docker: 0 },
+    { windows: 0, macos: 0, linux: 0, unknown: 0 },
+  );
+}
+
+function ensurePackedHour(historyByHour, timestamp) {
+  if (!historyByHour.has(timestamp)) {
+    historyByHour.set(timestamp, emptyPackedHour(timestamp));
   }
-  target[9] = target[9] === true || addition[9] === true;
+  return historyByHour.get(timestamp);
+}
+
+function allocateMetricDelta(
+  historyByHour,
+  coveredHours,
+  key,
+  delta,
+  start,
+  end,
+  retainStart,
+  retainEnd,
+) {
+  if (!Number.isFinite(start) || !Number.isFinite(end) || end <= start) return;
+  const integerDelta = Math.max(0, Math.round(delta));
+  const duration = end - start;
+  const firstHour = Math.max(Math.floor(start / HOUR_MS) * HOUR_MS, retainStart);
+  const lastHour = Math.min(Math.floor((end - 1) / HOUR_MS) * HOUR_MS, retainEnd);
+
+  for (let timestamp = firstHour; timestamp <= lastHour; timestamp += HOUR_MS) {
+    const overlapStart = Math.max(start, timestamp);
+    const overlapEnd = Math.min(end, timestamp + HOUR_MS);
+    // Rounded cumulative counts telescope, so every bucket is an integer and no count is lost.
+    const countBefore = Math.round(integerDelta * (overlapStart - start) / duration);
+    const countAfter = Math.round(integerDelta * (overlapEnd - start) / duration);
+    const row = ensurePackedHour(historyByHour, timestamp);
+    coveredHours.add(timestamp);
+    for (const index of METRIC_BUCKET_INDEXES[key]) row[index] += countAfter - countBefore;
+  }
 }
 
 function rowData(name, value, hourlyValue, total) {
@@ -249,70 +295,91 @@ function formattedHour(timestamp, timeZone) {
 }
 
 async function run(input) {
-  const previousState = safeState(input);
+  const storedState = safeState(input);
+  const previousState = storedState.v === STATE_VERSION ? storedState : {};
   const previousMetrics = previousState.m && typeof previousState.m === "object" ? previousState.m : {};
-  const initialized = new Set(Array.isArray(previousState.i) ? previousState.i : []);
+  const previousTimes = previousState.t && typeof previousState.t === "object" ? previousState.t : {};
   const { metrics: observed, warnings, failedSources } = await collect(input || {});
+  const now = Date.now();
   const current = {};
-  const changes = {};
+  const observationTimes = {};
+  const metricUpdates = [];
+  let measuredThisRun = false;
 
   for (const key of METRIC_KEYS) {
     const oldValue = Number(previousMetrics[key]) || 0;
+    const previousTime = Number(previousTimes[key]);
+    const hasPreviousTime = Number.isFinite(previousTime) && previousTime < now;
     const newValue = observed[key];
     if (Number.isFinite(newValue) && newValue >= 0) {
-      if (!initialized.has(key)) {
+      if (!hasPreviousTime) {
         current[key] = newValue;
-        changes[key] = 0;
-        initialized.add(key);
+        observationTimes[key] = now;
       } else if (newValue >= oldValue) {
         current[key] = newValue;
-        changes[key] = newValue - oldValue;
+        observationTimes[key] = now;
+        metricUpdates.push({ key, delta: newValue - oldValue, start: previousTime, end: now });
+        measuredThisRun = true;
       } else {
         current[key] = oldValue;
-        changes[key] = 0;
+        observationTimes[key] = previousTime;
         warnings.push(`${key} counter decreased; previous value retained`);
       }
     } else {
       current[key] = oldValue;
-      changes[key] = 0;
+      if (Number.isFinite(previousTime)) observationTimes[key] = previousTime;
     }
   }
 
   const lifetime = grouped(current);
-  const delta = grouped(changes);
-  const now = Date.now();
-  const sampleHour = Math.floor(now / HOUR_MS) * HOUR_MS - HOUR_MS;
-  let history = Array.isArray(previousState.h)
-    ? previousState.h.filter((row) => (
-      Array.isArray(row) &&
-      row.length === 10 &&
-      Number.isFinite(row[0])
-    ))
-    : [];
-  const sample = packedHour(sampleHour, delta.sources, delta.platforms, failedSources.length > 0);
-
-  if (history.length && history[history.length - 1][0] === sampleHour) {
-    addPacked(history[history.length - 1], sample);
-  } else {
-    history.push(sample);
+  const currentHour = Math.floor(now / HOUR_MS) * HOUR_MS;
+  const displayEndHour = currentHour - HOUR_MS;
+  const displayStartHour = displayEndHour - (HISTORY_HOURS - 1) * HOUR_MS;
+  const historyByHour = new Map();
+  if (Array.isArray(previousState.h)) {
+    for (const row of previousState.h) {
+      if (
+        Array.isArray(row) &&
+        row.length === 10 &&
+        Number.isSafeInteger(row[0]) &&
+        row[0] % HOUR_MS === 0 &&
+        row.slice(1, 9).every((value) => Number.isSafeInteger(value) && value >= 0)
+      ) historyByHour.set(row[0], [...row]);
+    }
   }
-  history = history
-    .filter((row) => (
-      row[0] >= sampleHour - (HISTORY_HOURS - 1) * HOUR_MS &&
-      row[0] <= sampleHour
-    ))
-    .slice(-HISTORY_HOURS);
+  const coveredHours = new Set(
+    Array.isArray(previousState.c)
+      ? previousState.c.filter((timestamp) => (
+        Number.isSafeInteger(timestamp) && timestamp % HOUR_MS === 0
+      ))
+      : [],
+  );
+  for (const update of metricUpdates) {
+    allocateMetricDelta(
+      historyByHour,
+      coveredHours,
+      update.key,
+      update.delta,
+      update.start,
+      update.end,
+      displayStartHour,
+      currentHour,
+    );
+  }
+  if (failedSources.length) ensurePackedHour(historyByHour, displayEndHour)[9] = true;
+
+  const history = Array.from(historyByHour.values())
+    .filter((row) => row[0] >= displayStartHour && row[0] <= currentHour)
+    .sort((left, right) => left[0] - right[0]);
+  const retainedCoveredHours = Array.from(coveredHours)
+    .filter((timestamp) => timestamp >= displayStartHour && timestamp <= currentHour)
+    .sort((left, right) => left - right);
 
   const expanded = history.map(unpackedHour);
   const expandedByHour = new Map(expanded.map((item) => [item.timestamp, item]));
-  const displayEndHour = sampleHour;
   const displayHours = Array.from({ length: HISTORY_HOURS }, (_unused, index) => {
     const timestamp = displayEndHour - (HISTORY_HOURS - 1 - index) * HOUR_MS;
-    return expandedByHour.get(timestamp) || unpackedHour(packedHour(
-      timestamp,
-      { github: 0, crates: 0, homebrew: 0, docker: 0 },
-      { windows: 0, macos: 0, linux: 0, unknown: 0 },
-    ));
+    return expandedByHour.get(timestamp) || unpackedHour(emptyPackedHour(timestamp));
   });
   const rollingSources = { github: 0, crates: 0, homebrew: 0, docker: 0 };
   const rollingPlatforms = { windows: 0, macos: 0, linux: 0, unknown: 0 };
@@ -324,7 +391,8 @@ async function run(input) {
   const rollingTotal = sum(rollingSources);
   const latest = displayHours[displayHours.length - 1];
   const latestTotal = sum(latest.sources);
-  const measuredHours = displayHours.filter((item) => expandedByHour.has(item.timestamp)).length;
+  const retainedCoveredSet = new Set(retainedCoveredHours);
+  const measuredHours = displayHours.filter((item) => retainedCoveredSet.has(item.timestamp)).length;
   const timeZone = localTimeZone(input);
   const displayedHourlyTotals = displayHours.map((item) => sum(item.sources));
   const observedMaxHourly = Math.max(0, ...displayedHourlyTotals);
@@ -348,8 +416,8 @@ async function run(input) {
     };
   });
 
-  const allMetricsReady = METRIC_KEYS.every((key) => initialized.has(key));
-  const hasMeasuredInterval = history.length > 1 || latestTotal > 0;
+  const allMetricsReady = METRIC_KEYS.every((key) => Number.isFinite(observationTimes[key]));
+  const hasMeasuredInterval = previousState.r === true || measuredThisRun;
   const sourceRows = [
     rowData("GitHub", rollingSources.github, latest.sources.github, rollingTotal),
     rowData("crates.io", rollingSources.crates, latest.sources.crates, rollingTotal),
@@ -391,9 +459,12 @@ async function run(input) {
     has_warnings: warnings.length > 0,
     updated_at: formattedUpdatedAt(now, timeZone),
     trmnl_state: {
+      v: STATE_VERSION,
       m: current,
-      i: Array.from(initialized),
+      t: observationTimes,
       h: history,
+      c: retainedCoveredHours,
+      r: hasMeasuredInterval,
     },
   };
 }

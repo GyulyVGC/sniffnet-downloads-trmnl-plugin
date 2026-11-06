@@ -17,9 +17,9 @@ The plugin displays:
 - Homebrew: counted as macOS, matching Sniffnet's existing published statistics;
 - GHCR/Docker: counted as Linux.
 
-The upstream services expose cumulative counters rather than timestamped download events. Hourly values are therefore differences between consecutive snapshots. A delayed refresh or delayed upstream update can make one bucket larger than the next.
+The upstream services expose cumulative counters rather than timestamped download events. Hourly values are therefore estimates: each difference between consecutive snapshots is distributed across clock hours in proportion to the time spent in each hour. Integer rounding preserves the measured total exactly.
 
-The first refresh captures a baseline and intentionally reports zero new downloads. Each later delta is assigned to the previous completed clock hour. TRMNL Saved State retains the latest 24 hourly buckets.
+The first refresh captures a baseline and intentionally reports zero new downloads. The current partial hour is retained in TRMNL Saved State but excluded from the chart and rolling totals, so the display always represents the latest 24 completed clock hours. Manual and delayed refreshes are folded into the same hour-based history.
 
 No API key is required. An optional read-only GitHub token can be configured if the public GitHub API rate limit is encountered.
 

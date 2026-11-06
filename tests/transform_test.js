@@ -12,6 +12,7 @@ const input = (state) => ({
     user: { time_zone_iana: "UTC" },
   },
 });
+const rowTotal = (row) => row.slice(1, 5).reduce((total, value) => total + value, 0);
 
 test("hourly transform state and chart behavior", async (suite) => {
   const originalDateNow = Date.now;
@@ -28,6 +29,15 @@ test("hourly transform state and chart behavior", async (suite) => {
     counts = { github: 100, crates: 40, homebrew: 20, docker: 10 };
     errorLogs = [];
   };
+
+  const populatedState = (history) => ({
+    v: 2,
+    m: { gw: 100, gm: 0, gl: 0, gu: 0, c: 40, b: 20, d: 10 },
+    t: Object.fromEntries(METRIC_KEYS.map((key) => [key, at(9, 30)])),
+    h: history,
+    c: history.map((row) => row[0]),
+    r: true,
+  });
 
   Date.now = () => now;
   console.error = (...args) => errorLogs.push(args.join(" "));
@@ -57,77 +67,202 @@ test("hourly transform state and chart behavior", async (suite) => {
   };
 
   try {
-    await suite.test("captures a baseline, then assigns deltas to the previous hour", async () => {
+    await suite.test("weights deltas across hours and hides the current partial hour", async () => {
       reset();
       const baseline = await run({});
 
       assert.equal(baseline.ready, false);
       assert.equal(baseline.baseline_only, true);
-      assert.equal(baseline.trmnl_state.h.length, 1);
-      assert.deepEqual(
-        baseline.trmnl_state.h[0],
-        [at(8), 0, 0, 0, 0, 0, 0, 0, 0, false],
-      );
+      assert.equal(baseline.trmnl_state.v, 2);
+      assert.equal(baseline.trmnl_state.h.length, 0);
 
       now = at(10, 5);
       counts = { github: 110, crates: 45, homebrew: 23, docker: 12 };
-      const measured = await run(input(baseline.trmnl_state));
+      const firstInterval = await run(input(baseline.trmnl_state));
 
-      assert.equal(measured.ready, true);
-      assert.equal(measured.baseline_only, false);
-      assert.equal(measured.latest_hour, 20);
-      assert.equal(measured.trmnl_state.h.at(-1)[0], at(9));
-      assert.equal(measured.hourly.at(-1).value, 20);
+      assert.equal(firstInterval.ready, true);
+      assert.equal(firstInterval.latest_hour, 19);
+      assert.equal(firstInterval.hourly.at(-1).hour_label, "09");
+      assert.equal(firstInterval.trmnl_state.h.find((row) => row[0] === at(9)).slice(1, 9).every(Number.isInteger), true);
+      assert.equal(rowTotal(firstInterval.trmnl_state.h.find((row) => row[0] === at(9))), 19);
+      assert.equal(rowTotal(firstInterval.trmnl_state.h.find((row) => row[0] === at(10))), 1);
+      assert.equal(firstInterval.rolling_24h, 19);
+
+      now = at(11, 5);
+      counts = { github: 120, crates: 50, homebrew: 26, docker: 14 };
+      const secondInterval = await run(input(firstInterval.trmnl_state));
+
+      assert.equal(secondInterval.latest_hour, 20);
+      assert.equal(secondInterval.hourly.at(-1).hour_label, "10");
+      assert.equal(rowTotal(secondInterval.trmnl_state.h.find((row) => row[0] === at(10))), 20);
+      assert.equal(rowTotal(secondInterval.trmnl_state.h.find((row) => row[0] === at(11))), 1);
+      assert.equal(secondInterval.rolling_24h, 39);
     });
 
-    await suite.test("retains an error for its hour and clears it for the next hour", async () => {
+    await suite.test("combines both sides of an hour at minute 59 without showing the partial hour", async () => {
+      reset();
+      now = at(9, 59);
+      const baseline = await run({});
+
+      now = at(10, 59);
+      counts.github = 160;
+      const firstInterval = await run(input(baseline.trmnl_state));
+
+      assert.equal(firstInterval.latest_hour, 1);
+      assert.equal(firstInterval.hourly.at(-1).hour_label, "09");
+      assert.equal(rowTotal(firstInterval.trmnl_state.h.find((row) => row[0] === at(10))), 59);
+      assert.equal(firstInterval.rolling_24h, 1);
+
+      now = at(11, 59);
+      counts.github = 220;
+      const secondInterval = await run(input(firstInterval.trmnl_state));
+
+      assert.equal(secondInterval.latest_hour, 60);
+      assert.equal(secondInterval.hourly.at(-1).hour_label, "10");
+      assert.equal(rowTotal(secondInterval.trmnl_state.h.find((row) => row[0] === at(10))), 60);
+      assert.equal(rowTotal(secondInterval.trmnl_state.h.find((row) => row[0] === at(11))), 59);
+      assert.equal(secondInterval.rolling_24h, 61);
+      assert.equal(secondInterval.trmnl_state.h.reduce((total, row) => total + rowTotal(row), 0), 120);
+    });
+
+    await suite.test("manual refreshes contribute once to the same completed hour", async () => {
+      reset();
+      const baseline = await run({});
+
+      now = at(10, 5);
+      counts.github = 160;
+      const hourly = await run(input(baseline.trmnl_state));
+
+      now = at(10, 20);
+      counts.github = 175;
+      const manual = await run(input(hourly.trmnl_state));
+      assert.equal(manual.latest_hour, 55);
+      assert.equal(rowTotal(manual.trmnl_state.h.find((row) => row[0] === at(10))), 20);
+
+      now = at(11, 5);
+      counts.github = 220;
+      const completed = await run(input(manual.trmnl_state));
+
+      assert.equal(completed.latest_hour, 60);
+      assert.equal(rowTotal(completed.trmnl_state.h.find((row) => row[0] === at(10))), 60);
+      assert.equal(completed.trmnl_state.h.reduce((total, row) => total + rowTotal(row), 0), 120);
+    });
+
+    await suite.test("a delayed refresh fills every overlapped completed hour", async () => {
+      reset();
+      const baseline = await run({});
+
+      now = at(12, 5);
+      counts.github = 280;
+      const delayed = await run(input(baseline.trmnl_state));
+
+      assert.equal(rowTotal(delayed.trmnl_state.h.find((row) => row[0] === at(9))), 55);
+      assert.equal(rowTotal(delayed.trmnl_state.h.find((row) => row[0] === at(10))), 60);
+      assert.equal(rowTotal(delayed.trmnl_state.h.find((row) => row[0] === at(11))), 60);
+      assert.equal(rowTotal(delayed.trmnl_state.h.find((row) => row[0] === at(12))), 5);
+      assert.equal(delayed.latest_hour, 60);
+      assert.equal(delayed.rolling_24h, 175);
+      assert.equal(delayed.trmnl_state.h.reduce((total, row) => total + rowTotal(row), 0), 180);
+    });
+
+    await suite.test("uses integer boundary rounding without losing a download", async () => {
+      reset();
+      const baseline = await run({});
+
+      now = at(10, 5);
+      counts.github = 107;
+      const measured = await run(input(baseline.trmnl_state));
+      const rows = measured.trmnl_state.h;
+
+      assert.equal(rowTotal(rows.find((row) => row[0] === at(9))), 6);
+      assert.equal(rowTotal(rows.find((row) => row[0] === at(10))), 1);
+      assert.equal(rows.reduce((total, row) => total + rowTotal(row), 0), 7);
+      assert.equal(rows.flatMap((row) => row.slice(1, 9)).every(Number.isInteger), true);
+    });
+
+    await suite.test("preserves totals through many jittered and manual intervals", async () => {
+      reset();
+      now = at(0, 5);
+      const baseline = await run({});
+      let state = baseline.trmnl_state;
+      let totalDelta = 0;
+      let seed = 0x5eed1234;
+
+      for (let index = 0; index < 18; index += 1) {
+        seed = (1664525 * seed + 1013904223) >>> 0;
+        now += (5 + seed % 71) * 60 * 1000;
+        seed = (1664525 * seed + 1013904223) >>> 0;
+        const delta = seed % 21;
+        counts.github += delta;
+        totalDelta += delta;
+        state = (await run(input(state))).trmnl_state;
+      }
+
+      assert.equal(state.h.reduce((total, row) => total + rowTotal(row), 0), totalDelta);
+      assert.ok(state.h.length <= 25);
+      for (const row of state.h) {
+        assert.equal(rowTotal(row), row.slice(5, 9).reduce((total, value) => total + value, 0));
+        assert.equal(row.slice(1, 9).every(Number.isInteger), true);
+      }
+    });
+
+    await suite.test("bounds state and keeps only the recent share after a long outage", async () => {
+      reset();
+      const baseline = await run({});
+
+      now = at(60, 5);
+      counts.github = 610;
+      const recovered = await run(input(baseline.trmnl_state));
+
+      assert.equal(recovered.trmnl_state.h.length, 25);
+      assert.equal(recovered.rolling_24h, 240);
+      assert.equal(recovered.latest_hour, 10);
+      assert.equal(rowTotal(recovered.trmnl_state.h.find((row) => row[0] === at(60))), 1);
+      assert.equal(
+        recovered.trmnl_state.h.reduce((total, row) => total + rowTotal(row), 0),
+        241,
+      );
+    });
+
+    await suite.test("retains a failed source timestamp and distributes its recovered delta", async () => {
       reset();
       const baseline = await run({});
 
       now = at(10, 5);
       failCrates = true;
-      counts = { github: 110, crates: 45, homebrew: 23, docker: 12 };
       const failed = await run(input(baseline.trmnl_state));
 
       assert.equal(failed.has_warnings, true);
       assert.equal(failed.hourly.at(-1).has_errors, true);
-      assert.equal(failed.trmnl_state.h.at(-1)[9], true);
-      assert.deepEqual(
-        errorLogs,
-        ["[Sniffnet Downloads] crates.io: mock failure"],
-      );
-
-      now = at(10, 35);
-      failCrates = false;
-      counts = { github: 112, crates: 48, homebrew: 24, docker: 13 };
-      const recovered = await run(input(failed.trmnl_state));
-
-      assert.equal(recovered.hourly.at(-1).has_errors, true);
-      assert.equal(recovered.trmnl_state.h.at(-1)[9], true);
+      assert.equal(failed.trmnl_state.t.c, at(9, 5));
+      assert.deepEqual(errorLogs, ["[Sniffnet Downloads] crates.io: mock failure"]);
 
       now = at(11, 5);
-      const nextHour = await run(input(recovered.trmnl_state));
+      failCrates = false;
+      counts.crates = 160;
+      const recovered = await run(input(failed.trmnl_state));
 
-      assert.equal(nextHour.hourly.at(-1).has_errors, false);
-      assert.equal(nextHour.trmnl_state.h.at(-1)[9], false);
+      assert.equal(recovered.trmnl_state.h.find((row) => row[0] === at(9))[2], 55);
+      assert.equal(recovered.trmnl_state.h.find((row) => row[0] === at(10))[2], 60);
+      assert.equal(recovered.trmnl_state.h.find((row) => row[0] === at(11))[2], 5);
+      assert.equal(recovered.hourly.at(-2).has_errors, true);
+      assert.equal(recovered.hourly.at(-1).has_errors, false);
     });
 
-    await suite.test("accepts only the new ten-field hourly state", async () => {
+    await suite.test("resets incompatible saved state as a fresh baseline", async () => {
       reset();
       now = at(10, 5);
-      const legacyState = {
+      const oldState = {
         m: { gw: 100, gm: 0, gl: 0, gu: 0, c: 40, b: 20, d: 10 },
         i: METRIC_KEYS,
-        h: [[at(8), 1, 0, 0, 0, 1, 0, 0, 0]],
+        h: [[at(9), 1, 0, 0, 0, 1, 0, 0, 0, false]],
       };
 
-      const result = await run(input(legacyState));
+      const result = await run(input(oldState));
 
-      assert.equal(result.trmnl_state.h.length, 1);
-      assert.deepEqual(
-        result.trmnl_state.h[0],
-        [at(9), 0, 0, 0, 0, 0, 0, 0, 0, false],
-      );
+      assert.equal(result.baseline_only, true);
+      assert.equal(result.trmnl_state.v, 2);
+      assert.deepEqual(result.trmnl_state.h, []);
     });
 
     await suite.test("keeps zero distinct from the five-percent visual minimum", async () => {
@@ -144,13 +279,8 @@ test("hourly transform state and chart behavior", async (suite) => {
           false,
         ];
       });
-      const state = {
-        m: { gw: 100, gm: 0, gl: 0, gu: 0, c: 40, b: 20, d: 10 },
-        i: METRIC_KEYS,
-        h: history,
-      };
 
-      const result = await run(input(state));
+      const result = await run(input(populatedState(history)));
       const heights = result.hourly.map((point) => point.height);
 
       assert.equal(result.rolling_24h, 101);
@@ -177,13 +307,8 @@ test("hourly transform state and chart behavior", async (suite) => {
           false,
         ];
       });
-      const state = {
-        m: { gw: 100, gm: 0, gl: 0, gu: 0, c: 40, b: 20, d: 10 },
-        i: METRIC_KEYS,
-        h: history,
-      };
 
-      const result = await run(input(state));
+      const result = await run(input(populatedState(history)));
 
       assert.equal(result.chart_max_formatted, "100");
       assert.equal(result.chart_min_formatted, "90");
