@@ -1,6 +1,9 @@
 const METRIC_KEYS = ["gw", "gm", "gl", "gu", "c", "b", "d"];
 const HOUR_MS = 60 * 60 * 1000;
 const HISTORY_HOURS = 24;
+const Y_AXIS_LABEL_GAP_PERCENT = 15;
+// Leave headroom inside TRMNL's five-second Serverless execution limit.
+const REQUEST_TIMEOUT_MS = 3500;
 
 function customField(input, key) {
   const direct = input && input[key];
@@ -13,7 +16,7 @@ function customField(input, key) {
 async function request(url, options = {}) {
   const response = await fetch(url, {
     ...options,
-    signal: AbortSignal.timeout(3500),
+    signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
   });
   if (!response.ok) {
     throw new Error(`${response.status} ${response.statusText}`);
@@ -139,7 +142,7 @@ function grouped(metrics) {
   };
 }
 
-function packedHour(timestamp, sources, platforms) {
+function packedHour(timestamp, sources, platforms, hasErrors = false) {
   return [
     timestamp,
     sources.github,
@@ -150,6 +153,7 @@ function packedHour(timestamp, sources, platforms) {
     platforms.macos,
     platforms.linux,
     platforms.unknown,
+    hasErrors,
   ];
 }
 
@@ -158,13 +162,15 @@ function unpackedHour(row) {
     timestamp: row[0],
     sources: { github: row[1], crates: row[2], homebrew: row[3], docker: row[4] },
     platforms: { windows: row[5], macos: row[6], linux: row[7], unknown: row[8] },
+    hasErrors: row[9] === true,
   };
 }
 
 function addPacked(target, addition) {
-  for (let index = 1; index < target.length; index += 1) {
+  for (let index = 1; index <= 8; index += 1) {
     target[index] += addition[index];
   }
+  target[9] = target[9] === true || addition[9] === true;
 }
 
 function rowData(name, value, hourlyValue, total) {
@@ -175,7 +181,7 @@ function rowData(name, value, hourlyValue, total) {
     formatted: value.toLocaleString("en-US"),
     hourly_formatted: hourlyValue.toLocaleString("en-US"),
     percent,
-    width: value > 0 ? Math.max(2, percent) : 0,
+    width: value > 0 ? Math.max(5, percent) : 0,
   };
 }
 
@@ -259,23 +265,33 @@ async function run(input) {
   const lifetime = grouped(current);
   const delta = grouped(changes);
   const now = Date.now();
-  const hour = Math.floor(now / HOUR_MS) * HOUR_MS;
+  const sampleHour = Math.floor(now / HOUR_MS) * HOUR_MS - HOUR_MS;
   let history = Array.isArray(previousState.h)
-    ? previousState.h.filter((row) => Array.isArray(row) && row.length === 9 && Number.isFinite(row[0]))
+    ? previousState.h.filter((row) => (
+      Array.isArray(row) &&
+      row.length === 10 &&
+      Number.isFinite(row[0])
+    ))
     : [];
-  const sample = packedHour(hour, delta.sources, delta.platforms);
+  const sample = packedHour(sampleHour, delta.sources, delta.platforms, failedSources.length > 0);
 
-  if (history.length && history[history.length - 1][0] === hour) {
+  if (history.length && history[history.length - 1][0] === sampleHour) {
     addPacked(history[history.length - 1], sample);
   } else {
     history.push(sample);
   }
-  history = history.filter((row) => row[0] >= hour - (HISTORY_HOURS - 1) * HOUR_MS).slice(-HISTORY_HOURS);
+  history = history
+    .filter((row) => (
+      row[0] >= sampleHour - (HISTORY_HOURS - 1) * HOUR_MS &&
+      row[0] <= sampleHour
+    ))
+    .slice(-HISTORY_HOURS);
 
   const expanded = history.map(unpackedHour);
   const expandedByHour = new Map(expanded.map((item) => [item.timestamp, item]));
+  const displayEndHour = sampleHour;
   const displayHours = Array.from({ length: HISTORY_HOURS }, (_unused, index) => {
-    const timestamp = hour - (HISTORY_HOURS - 1 - index) * HOUR_MS;
+    const timestamp = displayEndHour - (HISTORY_HOURS - 1 - index) * HOUR_MS;
     return expandedByHour.get(timestamp) || unpackedHour(packedHour(
       timestamp,
       { github: 0, crates: 0, homebrew: 0, docker: 0 },
@@ -284,24 +300,33 @@ async function run(input) {
   });
   const rollingSources = { github: 0, crates: 0, homebrew: 0, docker: 0 };
   const rollingPlatforms = { windows: 0, macos: 0, linux: 0, unknown: 0 };
-  for (const sampleHour of expanded) {
-    for (const key of Object.keys(rollingSources)) rollingSources[key] += sampleHour.sources[key];
-    for (const key of Object.keys(rollingPlatforms)) rollingPlatforms[key] += sampleHour.platforms[key];
+  for (const displayHour of displayHours) {
+    for (const key of Object.keys(rollingSources)) rollingSources[key] += displayHour.sources[key];
+    for (const key of Object.keys(rollingPlatforms)) rollingPlatforms[key] += displayHour.platforms[key];
   }
 
   const rollingTotal = sum(rollingSources);
-  const latest = expanded.length ? expanded[expanded.length - 1] : unpackedHour(packedHour(hour, delta.sources, delta.platforms));
+  const latest = displayHours[displayHours.length - 1];
   const latestTotal = sum(latest.sources);
+  const measuredHours = displayHours.filter((item) => expandedByHour.has(item.timestamp)).length;
   const timeZone = localTimeZone(input);
-  const observedMaxHourly = Math.max(0, ...displayHours.map((item) => sum(item.sources)));
+  const displayedHourlyTotals = displayHours.map((item) => sum(item.sources));
+  const observedMaxHourly = Math.max(0, ...displayedHourlyTotals);
+  const observedMinHourly = Math.min(...displayedHourlyTotals);
   const maxHourly = Math.max(1, observedMaxHourly);
+  const minHourlyHeight = observedMinHourly > 0
+    ? Math.max(5, Math.round((observedMinHourly / maxHourly) * 100))
+    : 0;
+  const showChartMin = observedMinHourly !== observedMaxHourly &&
+    minHourlyHeight <= 100 - Y_AXIS_LABEL_GAP_PERCENT;
   const hourly = displayHours.map((item, index) => {
     const value = sum(item.sources);
     const hourLabel = formattedHour(item.timestamp, timeZone);
     return {
       value,
       formatted: value.toLocaleString("en-US"),
-      height: value > 0 ? Math.max(4, Math.round((value / maxHourly) * 100)) : 0,
+      height: value > 0 ? Math.max(5, Math.round((value / maxHourly) * 100)) : 0,
+      has_errors: item.hasErrors,
       hour_label: hourLabel,
       axis_label: (index + 1) % 3 === 0 ? hourLabel : "",
     };
@@ -334,14 +359,14 @@ async function run(input) {
     latest_hour_formatted: latestTotal.toLocaleString("en-US"),
     rolling_24h: rollingTotal,
     rolling_24h_formatted: rollingTotal.toLocaleString("en-US"),
-    average_hour_formatted: Math.round(rollingTotal / Math.max(1, expanded.length)).toLocaleString("en-US"),
+    average_hour_formatted: Math.round(rollingTotal / Math.max(1, measuredHours)).toLocaleString("en-US"),
     source_rows: sourceRows,
     platform_rows: platformRows,
     hourly,
     chart_max_formatted: observedMaxHourly > 0 ? observedMaxHourly.toLocaleString("en-US") : "",
-    chart_mid_formatted: observedMaxHourly > 1
-      ? Math.ceil(observedMaxHourly / 2).toLocaleString("en-US")
-      : "",
+    chart_min_formatted: observedMinHourly.toLocaleString("en-US"),
+    chart_min_height: minHourlyHeight,
+    show_chart_min: showChartMin,
     axis_compact: [hourly[0].hour_label, hourly[12].hour_label, hourly[23].hour_label],
     ready: allMetricsReady && hasMeasuredInterval,
     baseline_only: allMetricsReady && !hasMeasuredInterval,

@@ -20,13 +20,18 @@
   .sn-kpi-label { display: block; margin-top: 4px; font-size: .75rem; font-weight: 700; text-transform: uppercase; }
   .sn-chart { border: 2px solid currentColor; border-radius: 8px; padding: 8px 10px 6px; }
   .sn-chart-body { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 6px; }
-  .sn-y-axis { height: 74px; display: flex; flex-direction: column; align-items: flex-end; justify-content: space-between; padding-bottom: 2px; font-size: .625rem; font-weight: 700; }
+  .sn-y-axis { height: 74px; position: relative; padding-bottom: 2px; font-size: .625rem; font-weight: 700; }
+  .sn-y-axis-sizer { display: flex; width: max-content; visibility: hidden; flex-direction: column; }
+  .sn-y-axis-value { position: absolute; right: 0; line-height: 1; }
+  .sn-y-axis-max { top: 0; }
+  .sn-y-axis-min { transform: translateY(50%); }
   .sn-section-head { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 5px; }
   .sn-section-title { font-size: .8125rem; font-weight: 800; text-transform: uppercase; letter-spacing: .7px; }
   .sn-section-note { font-size: .625rem; font-weight: 600; }
   .sn-bars { height: 74px; display: flex; align-items: flex-end; gap: 3px; border-bottom: 2px solid currentColor; border-left: 1px solid currentColor; }
   .sn-bar { height: 100%; flex: 1; display: flex; align-items: flex-end; position: relative; }
   .sn-bar-fill { display: block; width: 100%; background: currentColor; border-radius: 2px 2px 0 0; }
+  .sn-bar-fill--error { border: 2px solid currentColor; border-bottom: 0; background: transparent; box-sizing: border-box; }
   .sn-axis { display: flex; justify-content: space-between; margin-top: 3px; font-size: .625rem; font-weight: 700; }
   .sn-axis--hours span { flex: 1 1 0; text-align: center; }
   .sn-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; min-height: 0; }
@@ -48,6 +53,7 @@
   .sn-mini-list .name, .sn-mini-list .value { font-weight: 700; }
   .sn-mini-list .value { text-align: right; }
   .title_bar.sniffnet { width: 100%; justify-content: space-between; }
+  .title_bar.sniffnet .title, .title_bar.sniffnet .instance { font-family: sans-serif; }
   .title_bar.sniffnet .instance { flex: 1 1 auto; text-align: right; font-size: .75rem; }
   .title_bar.sniffnet--status { display: grid; grid-template-columns: 1fr auto 1fr; }
   .title_bar.sniffnet--status .instance { justify-self: end; }

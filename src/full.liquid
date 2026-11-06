@@ -1,3 +1,4 @@
+  <style>.sn-y-axis-min { bottom: {{ chart_min_height }}%; }</style>
   <div class="layout sniffnet">
     <div class="sn-summary">
       <div class="sn-kpi">
@@ -17,15 +18,15 @@
     <div class="sn-chart">
       <div class="sn-chart-body">
         <div class="sn-y-axis">
-          <span>{{ chart_max_formatted }}</span>
-          <span>{{ chart_mid_formatted }}</span>
-          <span>0</span>
+          <span class="sn-y-axis-sizer" aria-hidden="true"><span>{{ chart_max_formatted }}</span><span>{{ chart_min_formatted }}</span></span>
+          <span class="sn-y-axis-value sn-y-axis-max">{{ chart_max_formatted }}</span>
+          {% if show_chart_min %}<span class="sn-y-axis-value sn-y-axis-min">{{ chart_min_formatted }}</span>{% endif %}
         </div>
         <div>
           <div class="sn-bars">
             {% for point in hourly %}
-              <div class="sn-bar" title="{{ point.formatted }} downloads">
-                <span class="sn-bar-fill" style="height: {{ point.height }}%"></span>
+              <div class="sn-bar" title="{{ point.formatted }} downloads{% if point.has_errors %}; incomplete due to source error{% endif %}">
+                <span class="sn-bar-fill{% if point.has_errors %} sn-bar-fill--error{% endif %}" style="height: {{ point.height }}%"></span>
               </div>
             {% endfor %}
           </div>
@@ -66,8 +67,6 @@
     <span class="sn-footer-status">
       {% if has_warnings %}
         <span class="sn-status-icon">!</span><span>{{ warning_status }}</span>
-      {% else %}
-        <span class="sn-status-icon">✓</span><span>All sources updated</span>
       {% endif %}
     </span>
     <span class="instance">{{ updated_at }}</span>

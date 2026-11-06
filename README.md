@@ -19,7 +19,7 @@ The plugin displays:
 
 The upstream services expose cumulative counters rather than timestamped download events. Hourly values are therefore differences between consecutive snapshots. A delayed refresh or delayed upstream update can make one bucket larger than the next.
 
-The first refresh captures a baseline and intentionally reports zero new downloads. TRMNL Saved State retains the latest 24 hourly buckets.
+The first refresh captures a baseline and intentionally reports zero new downloads. Each later delta is assigned to the previous completed clock hour. TRMNL Saved State retains the latest 24 hourly buckets.
 
 No API key is required. An optional read-only GitHub token can be configured if the public GitHub API rate limit is encountered.
 
@@ -36,6 +36,7 @@ Open <http://localhost:4567>. The preview reloads whenever a file under `src/` c
 Useful checks:
 
 ```sh
+node --test tests/transform_test.js
 docker run --rm -v "$PWD:/plugin" trmnl/trmnlp lint
 docker run --rm -v "$PWD:/plugin" trmnl/trmnlp test
 docker run --rm -v "$PWD:/plugin" trmnl/trmnlp build --png
