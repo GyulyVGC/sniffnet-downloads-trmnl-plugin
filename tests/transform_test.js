@@ -73,6 +73,8 @@ test("hourly transform state and chart behavior", async (suite) => {
 
       assert.equal(baseline.ready, false);
       assert.equal(baseline.baseline_only, true);
+      assert.equal(baseline.chart_min_formatted, "");
+      assert.equal(baseline.show_chart_min, false);
       assert.equal(baseline.trmnl_state.v, 2);
       assert.equal(baseline.trmnl_state.h.length, 0);
 
@@ -265,12 +267,12 @@ test("hourly transform state and chart behavior", async (suite) => {
       assert.deepEqual(result.trmnl_state.h, []);
     });
 
-    await suite.test("keeps zero distinct from the five-percent visual minimum", async () => {
+    await suite.test("keeps zero distinct from the chart and share visual minimums", async () => {
       reset();
       now = at(10, 30);
       const endHour = at(9);
       const history = Array.from({ length: 24 }, (_unused, index) => {
-        const github = index === 0 ? 100 : 0;
+        const github = index === 0 ? 1000 : 0;
         const crates = index === 1 ? 1 : 0;
         return [
           endHour - (23 - index) * HOUR_MS,
@@ -283,14 +285,19 @@ test("hourly transform state and chart behavior", async (suite) => {
       const result = await run(input(populatedState(history)));
       const heights = result.hourly.map((point) => point.height);
 
-      assert.equal(result.rolling_24h, 101);
+      assert.equal(result.rolling_24h, 1001);
       assert.ok(heights.includes(100));
-      assert.ok(heights.includes(5));
+      assert.ok(heights.includes(4));
       assert.ok(heights.includes(0));
-      assert.equal(result.source_rows.find((row) => row.name === "crates.io").width, 5);
+      assert.equal(result.source_rows.find((row) => row.name === "GitHub").percent, 100);
+      assert.equal(result.source_rows.find((row) => row.name === "GitHub").width, 97);
+      assert.equal(result.source_rows.find((row) => row.name === "crates.io").width, 3);
       assert.equal(result.source_rows.find((row) => row.name === "Homebrew").width, 0);
-      assert.equal(result.platform_rows.find((row) => row.name === "Unknown").width, 5);
-      assert.equal(result.chart_min_formatted, "0");
+      assert.equal(result.platform_rows.find((row) => row.name === "Windows").percent, 100);
+      assert.equal(result.platform_rows.find((row) => row.name === "Windows").width, 97);
+      assert.equal(result.platform_rows.find((row) => row.name === "Unknown").width, 3);
+      assert.equal(result.chart_min_formatted, "1");
+      assert.equal(result.chart_min_height, 4);
       assert.equal(result.show_chart_min, true);
     });
 
@@ -314,6 +321,48 @@ test("hourly transform state and chart behavior", async (suite) => {
       assert.equal(result.chart_min_formatted, "90");
       assert.equal(result.chart_min_height, 90);
       assert.equal(result.show_chart_min, false);
+    });
+
+    await suite.test("aligns a small positive minimum label with the chart floor", async () => {
+      reset();
+      now = at(10, 30);
+      const endHour = at(9);
+      const history = Array.from({ length: 24 }, (_unused, index) => {
+        const github = index === 0 ? 1000 : 1;
+        return [
+          endHour - (23 - index) * HOUR_MS,
+          github, 0, 0, 0,
+          github, 0, 0, 0,
+          false,
+        ];
+      });
+
+      const result = await run(input(populatedState(history)));
+
+      assert.equal(Math.min(...result.hourly.map((point) => point.height)), 4);
+      assert.equal(result.chart_min_formatted, "1");
+      assert.equal(result.chart_min_height, 4);
+      assert.equal(result.show_chart_min, true);
+    });
+
+    await suite.test("keeps an exact full share at 100 percent", async () => {
+      reset();
+      now = at(10, 30);
+      const endHour = at(9);
+      const history = Array.from({ length: 24 }, (_unused, index) => {
+        const github = index === 23 ? 1 : 0;
+        return [
+          endHour - (23 - index) * HOUR_MS,
+          github, 0, 0, 0,
+          github, 0, 0, 0,
+          false,
+        ];
+      });
+
+      const result = await run(input(populatedState(history)));
+
+      assert.equal(result.source_rows.find((row) => row.name === "GitHub").width, 100);
+      assert.equal(result.platform_rows.find((row) => row.name === "Windows").width, 100);
     });
   } finally {
     Date.now = originalDateNow;

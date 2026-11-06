@@ -3,3 +3,5 @@ _build/
 
 # trmnlp test --report output
 report/
+
+.DS_Store

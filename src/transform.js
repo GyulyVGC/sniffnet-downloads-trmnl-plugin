@@ -12,6 +12,9 @@ const HOUR_MS = 60 * 60 * 1000;
 const HISTORY_HOURS = 24;
 const STATE_VERSION = 2;
 const Y_AXIS_LABEL_GAP_PERCENT = 15;
+const CHART_MIN_HEIGHT_PERCENT = 4;
+const SHARE_MIN_WIDTH_PERCENT = 3;
+const SHARE_MAX_WIDTH_PERCENT = 97;
 // Leave headroom inside TRMNL's five-second Serverless execution limit.
 const REQUEST_TIMEOUT_MS = 3500;
 
@@ -243,7 +246,11 @@ function rowData(name, value, hourlyValue, total) {
     formatted: value.toLocaleString("en-US"),
     hourly_formatted: hourlyValue.toLocaleString("en-US"),
     percent,
-    width: value > 0 ? Math.max(5, percent) : 0,
+    width: value > 0
+      ? (value === total
+        ? 100
+        : Math.min(SHARE_MAX_WIDTH_PERCENT, Math.max(SHARE_MIN_WIDTH_PERCENT, percent)))
+      : 0,
   };
 }
 
@@ -396,12 +403,19 @@ async function run(input) {
   const timeZone = localTimeZone(input);
   const displayedHourlyTotals = displayHours.map((item) => sum(item.sources));
   const observedMaxHourly = Math.max(0, ...displayedHourlyTotals);
-  const observedMinHourly = Math.min(...displayedHourlyTotals);
-  const maxHourly = Math.max(1, observedMaxHourly);
-  const minHourlyHeight = observedMinHourly > 0
-    ? Math.max(5, Math.round((observedMinHourly / maxHourly) * 100))
+  const positiveHourlyTotals = displayedHourlyTotals.filter((value) => value > 0);
+  const observedMinPositiveHourly = positiveHourlyTotals.length
+    ? Math.min(...positiveHourlyTotals)
     : 0;
-  const showChartMin = observedMinHourly !== observedMaxHourly &&
+  const maxHourly = Math.max(1, observedMaxHourly);
+  const minHourlyHeight = observedMinPositiveHourly > 0
+    ? Math.max(
+      CHART_MIN_HEIGHT_PERCENT,
+      Math.round((observedMinPositiveHourly / maxHourly) * 100),
+    )
+    : 0;
+  const showChartMin = observedMinPositiveHourly > 0 &&
+    observedMinPositiveHourly !== observedMaxHourly &&
     minHourlyHeight <= 100 - Y_AXIS_LABEL_GAP_PERCENT;
   const hourly = displayHours.map((item, index) => {
     const value = sum(item.sources);
@@ -409,7 +423,9 @@ async function run(input) {
     return {
       value,
       formatted: value.toLocaleString("en-US"),
-      height: value > 0 ? Math.max(5, Math.round((value / maxHourly) * 100)) : 0,
+      height: value > 0
+        ? Math.max(CHART_MIN_HEIGHT_PERCENT, Math.round((value / maxHourly) * 100))
+        : 0,
       has_errors: item.hasErrors,
       hour_label: hourLabel,
       axis_label: (index + 1) % 3 === 0 ? hourLabel : "",
@@ -448,7 +464,9 @@ async function run(input) {
     platform_rows: platformRows,
     hourly,
     chart_max_formatted: observedMaxHourly > 0 ? observedMaxHourly.toLocaleString("en-US") : "",
-    chart_min_formatted: observedMinHourly.toLocaleString("en-US"),
+    chart_min_formatted: observedMinPositiveHourly > 0
+      ? observedMinPositiveHourly.toLocaleString("en-US")
+      : "",
     chart_min_height: minHourlyHeight,
     show_chart_min: showChartMin,
     axis_compact: [hourly[0].hour_label, hourly[12].hour_label, hourly[23].hour_label],
