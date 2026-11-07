@@ -1,6 +1,12 @@
+<div align="center">
+  
 # Sniffnet downloads plugin for TRMNL
 
-A serverless download dashboard for Sniffnet on TRMNL e-ink displays.
+<img width="60%" src="https://github.com/user-attachments/assets/180d2628-4c4d-4e2f-85d1-95aec8d98d51" />
+
+TRMNL e-ink plugin to display Sniffnet download stats
+
+</div>
 
 The plugin shows:
 
