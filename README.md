@@ -1,10 +1,8 @@
 <div align="center">
   
-# Sniffnet downloads plugin for TRMNL
+<h1>TRMNL e-ink plugin to display Sniffnet download stats</h1>
 
-<img width="60%" src="https://github.com/user-attachments/assets/180d2628-4c4d-4e2f-85d1-95aec8d98d51" />
-
-TRMNL e-ink plugin to display Sniffnet download stats
+<img width="70%" src="https://github.com/user-attachments/assets/180d2628-4c4d-4e2f-85d1-95aec8d98d51" />
 
 </div>
 
