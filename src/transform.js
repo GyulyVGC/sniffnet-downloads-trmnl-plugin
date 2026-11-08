@@ -398,8 +398,6 @@ async function run(input) {
   const rollingTotal = sum(rollingSources);
   const latest = displayHours[displayHours.length - 1];
   const latestTotal = sum(latest.sources);
-  const retainedCoveredSet = new Set(retainedCoveredHours);
-  const measuredHours = displayHours.filter((item) => retainedCoveredSet.has(item.timestamp)).length;
   const timeZone = localTimeZone(input);
   const displayedHourlyTotals = displayHours.map((item) => sum(item.sources));
   const observedMaxHourly = Math.max(0, ...displayedHourlyTotals);
@@ -461,7 +459,6 @@ async function run(input) {
     latest_hour_formatted: latestTotal.toLocaleString("en-US"),
     rolling_24h: rollingTotal,
     rolling_24h_formatted: rollingTotal.toLocaleString("en-US"),
-    average_hour_formatted: Math.round(rollingTotal / Math.max(1, measuredHours)).toLocaleString("en-US"),
     source_rows: sourceRows,
     platform_rows: platformRows,
     hourly,
@@ -473,7 +470,6 @@ async function run(input) {
     show_chart_min: showChartMin,
     ready: allMetricsReady && hasMeasuredInterval,
     baseline_only: allMetricsReady && !hasMeasuredInterval,
-    status: warnings.length ? warnings.join("; ") : "All sources online",
     warning_status: warningStatus,
     has_warnings: warnings.length > 0,
     updated_at: formattedUpdatedAt(now, timeZone),
@@ -489,5 +485,5 @@ async function run(input) {
 }
 
 if (typeof module !== "undefined") {
-  module.exports = { run, githubPlatform, packageDownloadCount, formattedUpdatedAt };
+  module.exports = { run };
 }
