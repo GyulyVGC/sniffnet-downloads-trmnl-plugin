@@ -26,7 +26,8 @@
           <div class="sn-bars">
             {% for point in hourly %}
               <div class="sn-bar" title="{{ point.formatted }} downloads{% if point.has_errors %}; incomplete due to source error{% endif %}">
-                <span class="sn-bar-fill{% if point.has_errors %} sn-bar-fill--error{% endif %}" style="height: {{ point.height }}%"></span>
+                <span class="sn-bar-fill{% if point.show_error_bar %} sn-bar-fill--error{% endif %}" style="height: {{ point.height }}%"></span>
+                {% if point.show_error_icon %}<span class="sn-status-icon sn-bar-error-icon">!</span>{% endif %}
               </div>
             {% endfor %}
           </div>

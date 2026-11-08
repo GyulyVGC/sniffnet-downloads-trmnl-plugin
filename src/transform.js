@@ -427,6 +427,8 @@ async function run(input) {
         ? Math.max(CHART_MIN_HEIGHT_PERCENT, Math.round((value / maxHourly) * 100))
         : 0,
       has_errors: item.hasErrors,
+      show_error_bar: item.hasErrors && value > 0,
+      show_error_icon: item.hasErrors && value === 0,
       hour_label: hourLabel,
       axis_label: (index + 1) % 3 === 0 ? hourLabel : "",
     };

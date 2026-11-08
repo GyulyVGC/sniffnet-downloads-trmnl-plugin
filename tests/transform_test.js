@@ -236,6 +236,9 @@ test("hourly transform state and chart behavior", async (suite) => {
 
       assert.equal(failed.has_warnings, true);
       assert.equal(failed.hourly.at(-1).has_errors, true);
+      assert.equal(failed.hourly.at(-1).value, 0);
+      assert.equal(failed.hourly.at(-1).show_error_icon, true);
+      assert.equal(failed.hourly.at(-1).show_error_bar, false);
       assert.equal(failed.trmnl_state.t.c, at(9, 5));
       assert.deepEqual(errorLogs, ["[Sniffnet Downloads] crates.io: mock failure"]);
 
@@ -248,6 +251,8 @@ test("hourly transform state and chart behavior", async (suite) => {
       assert.equal(recovered.trmnl_state.h.find((row) => row[0] === at(10))[2], 60);
       assert.equal(recovered.trmnl_state.h.find((row) => row[0] === at(11))[2], 5);
       assert.equal(recovered.hourly.at(-2).has_errors, true);
+      assert.equal(recovered.hourly.at(-2).show_error_icon, false);
+      assert.equal(recovered.hourly.at(-2).show_error_bar, true);
       assert.equal(recovered.hourly.at(-1).has_errors, false);
     });
 

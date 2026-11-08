@@ -9,7 +9,7 @@
     </div>
     <div class="sn-chart">
       <div class="sn-section-head"><span class="sn-section-title">Hourly downloads</span><span class="sn-section-note">24 samples</span></div>
-      <div class="sn-bars">{% for point in hourly %}<div class="sn-bar"><span class="sn-bar-fill{% if point.has_errors %} sn-bar-fill--error{% endif %}" style="height: {{ point.height }}%"></span></div>{% endfor %}</div>
+      <div class="sn-bars">{% for point in hourly %}<div class="sn-bar"><span class="sn-bar-fill{% if point.show_error_bar %} sn-bar-fill--error{% endif %}" style="height: {{ point.height }}%"></span>{% if point.show_error_icon %}<span class="sn-status-icon sn-bar-error-icon">!</span>{% endif %}</div>{% endfor %}</div>
       <div class="sn-axis">{% for label in axis_compact %}<span>{{ label }}</span>{% endfor %}</div>
     </div>
     <div class="sn-panel">
