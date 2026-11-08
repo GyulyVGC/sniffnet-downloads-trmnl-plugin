@@ -471,7 +471,6 @@ async function run(input) {
       : "",
     chart_min_height: minHourlyHeight,
     show_chart_min: showChartMin,
-    axis_compact: [hourly[0].hour_label, hourly[12].hour_label, hourly[23].hour_label],
     ready: allMetricsReady && hasMeasuredInterval,
     baseline_only: allMetricsReady && !hasMeasuredInterval,
     status: warnings.length ? warnings.join("; ") : "All sources online",
